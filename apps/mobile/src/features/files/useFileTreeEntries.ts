@@ -1,7 +1,7 @@
 import { executeAtomQuery } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, ProjectEntry } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
 import { appAtomRegistry } from "../../state/atom-registry";
 import { projectEnvironment } from "../../state/projects";
@@ -42,6 +42,9 @@ export function useFileTreeEntries(input: {
       errors: new Map<string, string>(),
     }),
     [cwd, environmentId],
+  );
+  const [refreshingDirectories, setRefreshingDirectories] = useState<typeof directories | null>(
+    null,
   );
   useEffect(
     () => () => {
@@ -126,6 +129,7 @@ export function useFileTreeEntries(input: {
     directories.pending.clear();
     directories.errors.clear();
     const version = ++refreshVersion.current;
+    setRefreshingDirectories(directories);
     const remaining = paths.values();
     const worker = async () => {
       while (version === refreshVersion.current) {
@@ -134,9 +138,34 @@ export function useFileTreeEntries(input: {
         await loadDirectory(next.value, true);
       }
     };
-    for (let index = 0; index < Math.min(4, paths.size); index++) void worker();
+    const queries =
+      cwd !== null && environmentId !== null
+        ? [
+            projectEnvironment.listEntries({ environmentId, input: { cwd, directoryPath: "" } }),
+            ...(searching
+              ? [
+                  projectEnvironment.searchEntries({
+                    environmentId,
+                    input: { cwd, query: debouncedQuery, limit: 200 },
+                  }),
+                ]
+              : []),
+          ]
+        : [];
+    const work = [
+      ...queries.map((atom) =>
+        executeAtomQuery(appAtomRegistry, atom, { reportFailure: false, reportDefect: false }),
+      ),
+      ...Array.from({ length: Math.min(4, paths.size) }, () => worker()),
+    ];
     render();
+    return Promise.all(work).finally(() => {
+      if (version === refreshVersion.current) setRefreshingDirectories(null);
+    });
   }, [
+    cwd,
+    debouncedQuery,
+    environmentId,
     directories,
     loadDirectory,
     refreshRoot,
@@ -147,6 +176,7 @@ export function useFileTreeEntries(input: {
 
   return {
     entries: snapshot.entries,
+    isRefreshing: refreshingDirectories === directories,
     error:
       root.error ??
       (searching ? search.error : null) ??

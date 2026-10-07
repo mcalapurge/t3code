@@ -1,14 +1,8 @@
+import { LegendList } from "@legendapp/list/react-native";
 import type { ProjectEntry } from "@t3tools/contracts";
 import { SymbolView } from "../../components/AppSymbol";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Platform,
-  Pressable,
-  RefreshControl,
-  View,
-} from "react-native";
+import { ActivityIndicator, Platform, Pressable, RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
@@ -23,8 +17,6 @@ import {
 } from "./fileTree";
 
 const fileTreeCache = new WeakMap<ReadonlyArray<ProjectEntry>, ReadonlyArray<FileTreeNode>>();
-const FILE_TREE_INITIAL_RENDER_COUNT = 20;
-const FILE_TREE_RENDER_BATCH_SIZE = 12;
 const OPTIMISTIC_SELECTION_TIMEOUT_MS = 1_000;
 
 function cachedFileTree(entries: ReadonlyArray<ProjectEntry>): ReadonlyArray<FileTreeNode> {
@@ -116,6 +108,7 @@ export function FileTreeBrowser(props: {
   readonly entries: ReadonlyArray<ProjectEntry>;
   readonly error: string | null;
   readonly isPending: boolean;
+  readonly isRefreshing: boolean;
   readonly searchQuery: string;
   readonly searchTruncated: boolean;
   readonly selectedPath: string | null;
@@ -240,10 +233,15 @@ export function FileTreeBrowser(props: {
     ],
   );
 
+  const extraData = useMemo(
+    () => ({ expandedPaths, loadedDirectories, selectedPath }),
+    [expandedPaths, loadedDirectories, selectedPath],
+  );
+
   // UIKit owns the header inset on every supported iOS version. Keep the
   // list as direct screen content so automatic inset adjustment can find it.
   return (
-    <FlatList
+    <LegendList
       alwaysBounceVertical
       className="flex-1"
       data={visibleNodes}
@@ -254,16 +252,13 @@ export function FileTreeBrowser(props: {
       }
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
-      initialNumToRender={FILE_TREE_INITIAL_RENDER_COUNT}
-      maxToRenderPerBatch={FILE_TREE_RENDER_BATCH_SIZE}
-      updateCellsBatchingPeriod={16}
-      windowSize={5}
+      estimatedItemSize={42}
+      recycleItems
+      maintainVisibleContentPosition
+      extraData={extraData}
       contentContainerStyle={{ paddingTop: 8, paddingBottom: 8 }}
       refreshControl={
-        <RefreshControl
-          refreshing={props.isPending && visibleNodes.length > 0}
-          onRefresh={props.onRefresh}
-        />
+        <RefreshControl refreshing={props.isRefreshing} onRefresh={props.onRefresh} />
       }
       renderItem={renderItem}
       ListHeaderComponent={

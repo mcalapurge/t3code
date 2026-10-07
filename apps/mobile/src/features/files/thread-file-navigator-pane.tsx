@@ -97,6 +97,7 @@ export function ThreadFileNavigatorPane(props: {
             : (fileAccess.error ?? "This connection cannot read host files.")
       }
       isPending={fileAccess.isPending || entriesQuery.isPending}
+      isRefreshing={entriesQuery.isRefreshing}
       searchQuery={searchQuery}
       searchTruncated={entriesQuery.searchTruncated}
       selectedPath={props.selectedPath}
