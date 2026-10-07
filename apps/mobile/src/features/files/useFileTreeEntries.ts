@@ -188,6 +188,7 @@ export function useFileTreeEntries(input: {
       (searching && (query !== debouncedQuery || search.isPending)),
     searchTruncated: searching && (search.data?.truncated ?? false),
     loadedDirectories: new Set(directories.entries.keys()),
+    loadingDirectories: new Set(directories.pending.keys()),
     loadDirectory,
     refresh,
   };

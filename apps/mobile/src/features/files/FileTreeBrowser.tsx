@@ -43,6 +43,7 @@ const FileTreeRow = memo(function FileTreeRow(props: {
   readonly selected: boolean;
   readonly expanded: boolean;
   readonly loaded: boolean;
+  readonly loading: boolean;
   readonly onPressDirectory: (path: string) => void;
   readonly onPreviewFile?: (path: string) => void;
   readonly onPressFile: (path: string) => void;
@@ -95,7 +96,9 @@ const FileTreeRow = memo(function FileTreeRow(props: {
       >
         {node.name}
       </Text>
-      {node.kind === "directory" && props.loaded ? (
+      {node.kind === "directory" && props.expanded && props.loading ? (
+        <ActivityIndicator size="small" accessibilityLabel={`Loading ${node.name}`} />
+      ) : node.kind === "directory" && props.loaded ? (
         <Text className="text-2xs font-t3-medium text-foreground-tertiary">
           {node.children.length}
         </Text>
@@ -113,6 +116,7 @@ export function FileTreeBrowser(props: {
   readonly searchTruncated: boolean;
   readonly selectedPath: string | null;
   readonly loadedDirectories: ReadonlySet<string>;
+  readonly loadingDirectories: ReadonlySet<string>;
   readonly onLoadDirectory: (path: string) => void;
   readonly onPreviewFile?: (path: string) => void;
   readonly onRefresh: () => void;
@@ -132,6 +136,7 @@ export function FileTreeBrowser(props: {
     onPreviewFile,
     onSelectFile,
     loadedDirectories,
+    loadingDirectories,
     selectedPath: controlledSelectedPath,
   } = props;
   const controlledSelectedPathRef = useRef(controlledSelectedPath);
@@ -218,6 +223,7 @@ export function FileTreeBrowser(props: {
         selected={item.node.kind === "file" && item.node.path === selectedPath}
         expanded={expandedPaths.has(item.node.path)}
         loaded={loadedDirectories.has(item.node.path)}
+        loading={loadingDirectories.has(item.node.path)}
         onPressDirectory={toggleDirectory}
         onPreviewFile={onPreviewFile}
         onPressFile={handleSelectFile}
@@ -228,14 +234,15 @@ export function FileTreeBrowser(props: {
       handleSelectFile,
       onPreviewFile,
       loadedDirectories,
+      loadingDirectories,
       selectedPath,
       toggleDirectory,
     ],
   );
 
   const extraData = useMemo(
-    () => ({ expandedPaths, loadedDirectories, selectedPath }),
-    [expandedPaths, loadedDirectories, selectedPath],
+    () => ({ expandedPaths, loadedDirectories, loadingDirectories, selectedPath }),
+    [expandedPaths, loadedDirectories, loadingDirectories, selectedPath],
   );
 
   // UIKit owns the header inset on every supported iOS version. Keep the
