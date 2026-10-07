@@ -21,7 +21,7 @@ import {
   type NativeStackNavigatorProps,
   type NativeStackTypeBag,
 } from "@react-navigation/native-stack";
-import { useCallback, useRef, useState, type ComponentProps } from "react";
+import { useCallback, useState, type ComponentProps } from "react";
 import { StyleSheet, View } from "react-native";
 import { FormSheet, Stack } from "react-native-screens";
 import { V5StackHeader } from "./V5StackHeader.ios";
@@ -52,8 +52,8 @@ export function modalEnvelopeOptions(options: NativeStackNavigationOptions) {
 /** Keep outgoing screens until UIKit completes its pop, as required by v5. */
 export function V5CardStackView(props: V5StackViewProps) {
   const { preventedRoutes } = usePreventRemoveContext();
-  const completedNativeDismissals = useRef(new Set<string>());
   const [screens, setScreens] = useState({
+    completedNativeDismissals: new Set<string>(),
     routes: props.state.routes,
     descriptors: props.descriptors,
     observedRoutes: props.state.routes,
@@ -66,14 +66,14 @@ export function V5CardStackView(props: V5StackViewProps) {
     const routes = reconcileStackScreens(
       screens.routes,
       props.state.routes,
-      completedNativeDismissals.current,
+      screens.completedNativeDismissals,
     );
     const active = new Set(props.state.routes.map((route) => route.key));
-    for (const key of completedNativeDismissals.current) {
-      if (!active.has(key)) completedNativeDismissals.current.delete(key);
-    }
     const retainedKeys = new Set(routes.map((route) => route.key));
     setScreens({
+      completedNativeDismissals: new Set(
+        [...screens.completedNativeDismissals].filter((key) => active.has(key)),
+      ),
       routes,
       descriptors: Object.fromEntries(
         Object.entries({ ...screens.descriptors, ...props.descriptors }).filter(([key]) =>
@@ -88,27 +88,31 @@ export function V5CardStackView(props: V5StackViewProps) {
   // a placeholder whose navigation rejects setOptions and dispatches.
   const nativeDismiss = useCallback(
     (key: string) => {
-      completedNativeDismissals.current.add(key);
       const state = props.navigation.getState();
+      const attached = state.routes.some((route) => route.key === key);
+      setScreens((current) => {
+        const completedNativeDismissals = new Set(current.completedNativeDismissals);
+        if (attached) {
+          completedNativeDismissals.add(key);
+          return { ...current, completedNativeDismissals };
+        }
+        // A delayed callback needs immediate cleanup: the router already
+        // removed the route, so no further router update will follow.
+        completedNativeDismissals.delete(key);
+        const descriptors = { ...current.descriptors };
+        delete descriptors[key];
+        return {
+          ...current,
+          completedNativeDismissals,
+          routes: current.routes.filter((route) => route.key !== key),
+          descriptors,
+        };
+      });
       const count = nativeWorkspacePopCount(state, key);
-      if (count) {
+      if (count)
         props.navigation.dispatch({ ...StackActions.pop(count), source: key, target: state.key });
-      } else if (!state.routes.some((route) => route.key === key)) {
-        // A delayed native callback may arrive after the router already removed
-        // this route. No router update will follow to release its React content.
-        completedNativeDismissals.current.delete(key);
-        setScreens((current) => {
-          const descriptors = { ...current.descriptors };
-          delete descriptors[key];
-          return {
-            ...current,
-            routes: current.routes.filter((route) => route.key !== key),
-            descriptors,
-          };
-        });
-      }
     },
-    [props.navigation],
+    [props.navigation, setScreens],
   );
   const removeDismissed = useCallback(
     (key: string) => {
@@ -124,7 +128,7 @@ export function V5CardStackView(props: V5StackViewProps) {
         });
       }
     },
-    [props.navigation],
+    [props.navigation, setScreens],
   );
   return (
     <View className="flex-1 bg-screen">
