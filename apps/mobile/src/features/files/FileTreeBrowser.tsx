@@ -1,14 +1,20 @@
 import type { ProjectEntry } from "@t3tools/contracts";
 import { SymbolView } from "../../components/AppSymbol";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  Platform,
+  Pressable,
+  RefreshControl,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
 import { PierreEntryIcon } from "../../components/PierreEntryIcon";
 import { cn } from "../../lib/cn";
 import { IOS_NAV_BAR_HEIGHT } from "../../lib/layoutMetrics";
-import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import {
   buildFileTree,
   flattenFileTree,
@@ -127,7 +133,7 @@ export function FileTreeBrowser(props: {
   const insets = useSafeAreaInsets();
   // Native transparent-header height ≈ safe-area top + nav bar (~44). Matches the
   // observed adjustedContentInset bottom (~102) seen in the native trace.
-  const headerInset = NATIVE_LIQUID_GLASS_SUPPORTED ? insets.top + IOS_NAV_BAR_HEIGHT : 0;
+  const headerInset = Platform.OS === "ios" ? insets.top + IOS_NAV_BAR_HEIGHT : 0;
   const {
     onLoadDirectory,
     onPreviewFile,
@@ -234,22 +240,17 @@ export function FileTreeBrowser(props: {
     ],
   );
 
-  // SPIKE: render the FlatList as the screen's DIRECT content (no wrapping View), and
-  // mirror the Home ScrollView exactly — `contentInsetAdjustmentBehavior: "automatic"`
-  // with NO manual contentInset. iOS only applies the nav-bar top inset + scroll-edge
-  // blur to a scroll view in the screen's primary position; a scroll view buried in
-  // flex-1 Views is ignored, which is why the tree rendered under the header with no blur.
+  // UIKit owns the header inset on every supported iOS version. Keep the
+  // list as direct screen content so automatic inset adjustment can find it.
   return (
     <FlatList
       alwaysBounceVertical
       className="flex-1"
       data={visibleNodes}
       keyExtractor={(item) => item.node.path}
-      contentInsetAdjustmentBehavior={NATIVE_LIQUID_GLASS_SUPPORTED ? "automatic" : "never"}
+      contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : "never"}
       scrollIndicatorInsets={
-        NATIVE_LIQUID_GLASS_SUPPORTED
-          ? { top: headerInset, left: 0, right: 0, bottom: 0 }
-          : undefined
+        Platform.OS === "ios" ? { top: headerInset, left: 0, right: 0, bottom: 0 } : undefined
       }
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"

@@ -1,4 +1,7 @@
-import { createV5StackNavigator as createNativeStackNavigator } from "./native/createV5StackNavigator";
+import {
+  createV5StackNavigator as createNativeStackNavigator,
+  createV5SheetStackNavigator,
+} from "./native/createV5StackNavigator";
 import { createWorkspaceStackNavigator } from "./features/layout/createWorkspaceStackNavigator";
 import {
   createPathConfigForStaticNavigation,
@@ -8,7 +11,6 @@ import {
   useNavigation,
 } from "@react-navigation/native";
 import {
-  createNativeStackNavigator as createLegacyNativeStackNavigator,
   createNativeStackScreen,
   type NativeStackNavigationOptions,
 } from "@react-navigation/native-stack";
@@ -190,10 +192,7 @@ const LEGAL_DOCUMENT_HEADER_OPTIONS: AppScreenOptions = {
   presentation: "fullScreenModal",
 };
 
-// Keep both nested Settings navigators on the compatibility renderer. Mixing
-// v5 hosts into this hierarchy makes UIKit accessibility hit testing fail
-// after pushing a Settings subpage. The workspace itself still uses v5.
-const SettingsContentStack = createLegacyNativeStackNavigator({
+const SettingsContentStack = createV5SheetStackNavigator({
   initialRouteName: "Settings",
   screenOptions: {
     ...GLASS_HEADER_OPTIONS,
@@ -403,7 +402,7 @@ const SettingsContentStack = createLegacyNativeStackNavigator({
 // The outer stack never owns visible chrome. Settings routes render inside a
 // nested stack whose native header remains mounted, while Clerk owns auth chrome.
 // Keeping bar visibility invariant avoids iOS 26's headerless-to-headered jump.
-const SettingsSheetStack = createLegacyNativeStackNavigator({
+const SettingsSheetStack = createV5SheetStackNavigator({
   initialRouteName: "SettingsContent",
   screenOptions: {
     headerShown: false,

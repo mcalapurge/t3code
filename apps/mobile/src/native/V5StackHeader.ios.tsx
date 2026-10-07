@@ -218,6 +218,7 @@ export function V5StackHeader(props: {
       backButtonHidden={options.headerBackVisible === false}
       ios={{
         navigationItemStyle: options.unstable_navigationItemStyle,
+        tintColor: options.headerTintColor,
         searchBar:
           mailSearch || searchOptions ? (
             <SearchBar

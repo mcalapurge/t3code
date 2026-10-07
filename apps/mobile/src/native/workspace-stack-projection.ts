@@ -45,7 +45,13 @@ export function partitionStackPresentations<T>(
 export function reconcileStackScreens<T extends { readonly key: string }>(
   previous: readonly T[],
   current: readonly T[],
+  completedNativeDismissals: ReadonlySet<string> = new Set(),
 ): T[] {
   const active = new Set(current.map((route) => route.key));
-  return [...previous.filter((route) => !active.has(route.key)), ...current];
+  return [
+    ...previous.filter(
+      (route) => !active.has(route.key) && !completedNativeDismissals.has(route.key),
+    ),
+    ...current,
+  ];
 }

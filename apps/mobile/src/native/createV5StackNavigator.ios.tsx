@@ -21,9 +21,9 @@ import {
   type NativeStackNavigatorProps,
   type NativeStackTypeBag,
 } from "@react-navigation/native-stack";
-import { useCallback, useState, type ComponentProps } from "react";
-import { View } from "react-native";
-import { Stack } from "react-native-screens";
+import { useCallback, useRef, useState, type ComponentProps } from "react";
+import { StyleSheet, View } from "react-native";
+import { FormSheet, Stack } from "react-native-screens";
 import { V5StackHeader } from "./V5StackHeader.ios";
 import { NativeColumnContent } from "./NativeColumnContent.ios";
 import {
@@ -52,6 +52,7 @@ export function modalEnvelopeOptions(options: NativeStackNavigationOptions) {
 /** Keep outgoing screens until UIKit completes its pop, as required by v5. */
 export function V5CardStackView(props: V5StackViewProps) {
   const { preventedRoutes } = usePreventRemoveContext();
+  const completedNativeDismissals = useRef(new Set<string>());
   const [screens, setScreens] = useState({
     routes: props.state.routes,
     descriptors: props.descriptors,
@@ -62,9 +63,23 @@ export function V5CardStackView(props: V5StackViewProps) {
     screens.observedRoutes !== props.state.routes ||
     screens.observedDescriptors !== props.descriptors
   ) {
+    const routes = reconcileStackScreens(
+      screens.routes,
+      props.state.routes,
+      completedNativeDismissals.current,
+    );
+    const active = new Set(props.state.routes.map((route) => route.key));
+    for (const key of completedNativeDismissals.current) {
+      if (!active.has(key)) completedNativeDismissals.current.delete(key);
+    }
+    const retainedKeys = new Set(routes.map((route) => route.key));
     setScreens({
-      routes: reconcileStackScreens(screens.routes, props.state.routes),
-      descriptors: { ...screens.descriptors, ...props.descriptors },
+      routes,
+      descriptors: Object.fromEntries(
+        Object.entries({ ...screens.descriptors, ...props.descriptors }).filter(([key]) =>
+          retainedKeys.has(key),
+        ),
+      ),
       observedRoutes: props.state.routes,
       observedDescriptors: props.descriptors,
     });
@@ -73,10 +88,25 @@ export function V5CardStackView(props: V5StackViewProps) {
   // a placeholder whose navigation rejects setOptions and dispatches.
   const nativeDismiss = useCallback(
     (key: string) => {
+      completedNativeDismissals.current.add(key);
       const state = props.navigation.getState();
       const count = nativeWorkspacePopCount(state, key);
-      if (count)
+      if (count) {
         props.navigation.dispatch({ ...StackActions.pop(count), source: key, target: state.key });
+      } else if (!state.routes.some((route) => route.key === key)) {
+        // A delayed native callback may arrive after the router already removed
+        // this route. No router update will follow to release its React content.
+        completedNativeDismissals.current.delete(key);
+        setScreens((current) => {
+          const descriptors = { ...current.descriptors };
+          delete descriptors[key];
+          return {
+            ...current,
+            routes: current.routes.filter((route) => route.key !== key),
+            descriptors,
+          };
+        });
+      }
     },
     [props.navigation],
   );
@@ -114,7 +144,9 @@ export function V5CardStackView(props: V5StackViewProps) {
               }
               onDismiss={removeDismissed}
               onNativeDismiss={nativeDismiss}
-              onNativeDismissPrevented={() => descriptor.navigation.goBack()}
+              onNativeDismissPrevented={() => {
+                if (preventedRoutes[route.key]?.preventRemove) descriptor.navigation.goBack();
+              }}
               onWillAppear={() =>
                 props.navigation.emit({
                   type: "transitionStart",
@@ -201,7 +233,128 @@ export function V5StackView(props: V5StackViewProps) {
   );
 }
 
-function V5StackNavigator({
+/** Keep a direct card host mounted while v5 form sheets present above it. */
+export function V5SheetStackView(props: V5StackViewProps) {
+  const { preventedRoutes } = usePreventRemoveContext();
+  const groups = partitionStackPresentations(
+    props.state.routes,
+    (route) => props.descriptors[route.key]?.options.presentation === "formSheet",
+  );
+  const [retained, setRetained] = useState({
+    groups: groups.slice(1),
+    descriptors: props.descriptors,
+    observedRoutes: props.state.routes,
+    observedDescriptors: props.descriptors,
+  });
+  if (
+    retained.observedRoutes !== props.state.routes ||
+    retained.observedDescriptors !== props.descriptors
+  ) {
+    const active = new Set(groups.slice(1).map((group) => group[0]!.key));
+    const sheets = [
+      ...groups.slice(1),
+      ...retained.groups.filter((group) => !active.has(group[0]!.key)),
+    ];
+    const sheetKeys = new Set(sheets.flatMap((group) => group.map((route) => route.key)));
+    setRetained({
+      groups: sheets,
+      descriptors: Object.fromEntries(
+        Object.entries({ ...retained.descriptors, ...props.descriptors }).filter(([key]) =>
+          sheetKeys.has(key),
+        ),
+      ),
+      observedRoutes: props.state.routes,
+      observedDescriptors: props.descriptors,
+    });
+  }
+  const removeSheet = (key: string) => {
+    setRetained((current) => {
+      const sheets = current.groups.filter((group) => group[0]!.key !== key);
+      const sheetKeys = new Set(sheets.flatMap((group) => group.map((route) => route.key)));
+      return {
+        ...current,
+        groups: sheets,
+        descriptors: Object.fromEntries(
+          Object.entries(current.descriptors).filter(([routeKey]) => sheetKeys.has(routeKey)),
+        ),
+      };
+    });
+  };
+  const base = groups[0] ?? [];
+  return (
+    <View className="flex-1 bg-screen">
+      <V5CardStackView
+        {...props}
+        state={{ ...props.state, routes: base, index: base.length - 1, preloadedRoutes: [] }}
+      />
+      {retained.groups.map((group) => {
+        const first = group[0]!;
+        const descriptor = props.descriptors[first.key] ?? retained.descriptors[first.key];
+        if (!descriptor) return null;
+        const options = descriptor.options;
+        const attached = props.state.routes.some((route) => route.key === first.key);
+        return (
+          <FormSheet
+            key={first.key}
+            isOpen={attached}
+            detents={options.sheetAllowedDetents}
+            initialDetentIndex={options.sheetInitialDetentIndex}
+            largestUndimmedDetentIndex={options.sheetLargestUndimmedDetentIndex}
+            prefersGrabberVisible={options.sheetGrabberVisible}
+            preferredCornerRadius={options.sheetCornerRadius}
+            prefersScrollingExpandsWhenScrolledToEdge={options.sheetExpandsWhenScrolledToEdge}
+            nativeContainerStyle={{
+              backgroundColor: StyleSheet.flatten(options.contentStyle)?.backgroundColor,
+            }}
+            preventNativeDismiss={
+              group.some((route) => preventedRoutes[route.key]?.preventRemove) ||
+              options.gestureEnabled === false
+            }
+            onNativeDismissPrevented={() => {
+              const guarded = group.findLast((route) => preventedRoutes[route.key]?.preventRemove);
+              if (guarded) {
+                const state = props.navigation.getState();
+                const count = nativeWorkspacePopCount(state, first.key);
+                if (count)
+                  props.navigation.dispatch({
+                    ...StackActions.pop(count),
+                    source: first.key,
+                    target: state.key,
+                  });
+              }
+            }}
+            onDismiss={() => removeSheet(first.key)}
+            onNativeDismiss={() => {
+              const state = props.navigation.getState();
+              const count = nativeWorkspacePopCount(state, first.key);
+              if (count)
+                props.navigation.dispatch({
+                  ...StackActions.pop(count),
+                  source: first.key,
+                  target: state.key,
+                });
+              removeSheet(first.key);
+            }}
+          >
+            <V5CardStackView
+              {...props}
+              descriptors={{ ...retained.descriptors, ...props.descriptors }}
+              state={{
+                ...props.state,
+                routes: group,
+                index: group.length - 1,
+                preloadedRoutes: [],
+              }}
+            />
+          </FormSheet>
+        );
+      })}
+    </View>
+  );
+}
+
+function V5Navigator({
+  nativeSheets,
   id,
   initialRouteName,
   UNSTABLE_routeNamesChangeBehavior,
@@ -212,7 +365,7 @@ function V5StackNavigator({
   screenLayout,
   UNSTABLE_router,
   ...rest
-}: NativeStackNavigatorProps) {
+}: NativeStackNavigatorProps & { readonly nativeSheets?: boolean }) {
   const { state, describe, descriptors, navigation, NavigationContent } = useNavigationBuilder<
     StackNavigationState<ParamListBase>,
     StackRouterOptions,
@@ -230,9 +383,10 @@ function V5StackNavigator({
     screenLayout,
     UNSTABLE_router,
   });
+  const StackView = nativeSheets ? V5SheetStackView : V5StackView;
   return (
     <NavigationContent>
-      <V5StackView
+      <StackView
         {...rest}
         state={state}
         describe={describe}
@@ -241,6 +395,14 @@ function V5StackNavigator({
       />
     </NavigationContent>
   );
+}
+
+function V5StackNavigator(props: NativeStackNavigatorProps) {
+  return <V5Navigator {...props} />;
+}
+
+function V5SheetStackNavigator(props: NativeStackNavigatorProps) {
+  return <V5Navigator {...props} nativeSheets />;
 }
 
 type V5TypeBag<ParamList extends ParamListBase, NavigatorID extends string | undefined> = Omit<
@@ -254,4 +416,14 @@ export function createV5StackNavigator<
   const Config extends StaticConfig<TypeBag> = StaticConfig<TypeBag>,
 >(config?: Config): TypedNavigator<TypeBag, Config> {
   return createNavigatorFactory(V5StackNavigator)(config);
+}
+
+/** For navigators whose presentations are cards and form sheets only. */
+export function createV5SheetStackNavigator<
+  const ParamList extends ParamListBase,
+  const NavigatorID extends string | undefined = string | undefined,
+  const TypeBag extends NavigatorTypeBagBase = V5TypeBag<ParamList, NavigatorID>,
+  const Config extends StaticConfig<TypeBag> = StaticConfig<TypeBag>,
+>(config?: Config): TypedNavigator<TypeBag, Config> {
+  return createNavigatorFactory(V5SheetStackNavigator)(config);
 }

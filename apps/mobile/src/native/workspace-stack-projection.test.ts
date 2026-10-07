@@ -101,6 +101,24 @@ describe("native workspace dismissal", () => {
 });
 
 describe("v5 stack handoff", () => {
+  it("releases a completed native pop when the router acknowledges it", () => {
+    const completed = new Set([files.key]);
+    expect(reconcileStackScreens([home, thread, files], [home, thread, files], completed)).toEqual([
+      home,
+      thread,
+      files,
+    ]);
+    expect(reconcileStackScreens([home, thread, files], [home, thread], completed)).toEqual([
+      home,
+      thread,
+    ]);
+  });
+  it("still retains an unfinished JS pop beside a completed native pop", () => {
+    expect(reconcileStackScreens([home, thread, files], [home], new Set([files.key]))).toEqual([
+      thread,
+      home,
+    ]);
+  });
   it("retains removed native screens through a pop followed immediately by a push", () => {
     const popped = reconcileStackScreens([home, thread, files], [home, thread]);
     const next = { ...files, key: "new-files" };

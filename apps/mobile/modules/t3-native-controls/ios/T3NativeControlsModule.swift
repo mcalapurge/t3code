@@ -12,7 +12,10 @@ public final class T3NativeControlsModule: Module {
 
   public func definition() -> ModuleDefinition {
     Constants {
-      ["supportsWorkspaceColumns": NSClassFromString("RNSSplitHostComponentView") != nil]
+      if #available(iOS 26.0, *) {
+        return ["supportsWorkspaceColumns": NSClassFromString("RNSSplitHostComponentView") != nil]
+      }
+      return ["supportsWorkspaceColumns": false]
     }
     View(T3LayoutMetricsView.self) {
       ViewName("LayoutMetrics")
