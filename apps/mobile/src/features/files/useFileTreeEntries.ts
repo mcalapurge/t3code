@@ -30,7 +30,8 @@ export function useFileTreeEntries(input: {
         })
       : null,
   );
-  const [revision, render] = useReducer((value: number) => value + 1, 0);
+  const [, render] = useReducer((value: number) => value + 1, 0);
+  const [entriesRevision, entriesChanged] = useReducer((value: number) => value + 1, 0);
   const refreshVersion = useRef(0);
   const directories = useMemo(
     () => ({
@@ -86,6 +87,7 @@ export function useFileTreeEntries(input: {
                 entry.path.slice(0, Math.max(0, entry.path.lastIndexOf("/"))) === directoryPath,
             ),
           );
+          entriesChanged();
         } else {
           const error = Cause.squash(result.cause);
           directories.errors.set(
@@ -116,8 +118,8 @@ export function useFileTreeEntries(input: {
       }
     };
     visit((rootData?.entries ?? []).filter((entry) => !entry.path.includes("/")));
-    return { revision, entries: [...merged.values()], reachableDirectories };
-  }, [directories, revision, rootData, searchData, searching]);
+    return { revision: entriesRevision, entries: [...merged.values()], reachableDirectories };
+  }, [directories, entriesRevision, rootData, searchData, searching]);
 
   const refresh = useCallback(() => {
     refreshRoot();

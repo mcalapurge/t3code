@@ -44,7 +44,7 @@ const FileTreeRow = memo(function FileTreeRow(props: {
   readonly expanded: boolean;
   readonly loaded: boolean;
   readonly loading: boolean;
-  readonly onPressDirectory: (path: string) => void;
+  readonly onPressDirectory: (path: string, expand: boolean) => void;
   readonly onPreviewFile?: (path: string) => void;
   readonly onPressFile: (path: string) => void;
 }) {
@@ -61,7 +61,7 @@ const FileTreeRow = memo(function FileTreeRow(props: {
       }}
       onPress={() => {
         if (node.kind === "directory") {
-          props.onPressDirectory(node.path);
+          props.onPressDirectory(node.path, !props.expanded);
           return;
         }
         props.onPressFile(node.path);
@@ -188,17 +188,21 @@ export function FileTreeBrowser(props: {
     [],
   );
 
-  const toggleDirectory = useCallback((path: string) => {
-    setExpandedPaths((current) => {
-      const next = new Set(current);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
-      }
-      return next;
-    });
-  }, []);
+  const toggleDirectory = useCallback(
+    (path: string, expand: boolean) => {
+      if (expand) onLoadDirectory(path);
+      setExpandedPaths((current) => {
+        const next = new Set(current);
+        if (next.has(path)) {
+          next.delete(path);
+        } else {
+          next.add(path);
+        }
+        return next;
+      });
+    },
+    [onLoadDirectory],
+  );
   const handleSelectFile = useCallback(
     (path: string) => {
       if (pendingSelectionTimeoutRef.current !== null) {
