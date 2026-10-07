@@ -2,7 +2,6 @@ import {
   createNavigatorFactory,
   NavigationContext,
   NavigationRouteContext,
-  StackActions,
   StackRouter,
   useNavigationBuilder,
   usePreventRemoveContext,
@@ -27,6 +26,7 @@ import { FormSheet, Stack } from "react-native-screens";
 import { V5StackHeader } from "./V5StackHeader.ios";
 import { NativeColumnContent } from "./NativeColumnContent.ios";
 import {
+  nativeWorkspacePopAction,
   nativeWorkspacePopCount,
   partitionStackPresentations,
   reconcileStackScreens,
@@ -108,9 +108,8 @@ export function V5CardStackView(props: V5StackViewProps) {
           descriptors,
         };
       });
-      const count = nativeWorkspacePopCount(state, key);
-      if (count)
-        props.navigation.dispatch({ ...StackActions.pop(count), source: key, target: state.key });
+      const action = nativeWorkspacePopAction(state, key);
+      if (action) props.navigation.dispatch(action);
     },
     [props.navigation, setScreens],
   );
@@ -296,7 +295,7 @@ export function V5SheetStackView(props: V5StackViewProps) {
         const descriptor = props.descriptors[first.key] ?? retained.descriptors[first.key];
         if (!descriptor) return null;
         const options = descriptor.options;
-        const attached = props.state.routes.some((route) => route.key === first.key);
+        const attached = nativeWorkspacePopCount(props.state, first.key) > 0;
         return (
           <FormSheet
             key={first.key}
@@ -318,25 +317,15 @@ export function V5SheetStackView(props: V5StackViewProps) {
               const guarded = group.findLast((route) => preventedRoutes[route.key]?.preventRemove);
               if (guarded) {
                 const state = props.navigation.getState();
-                const count = nativeWorkspacePopCount(state, first.key);
-                if (count)
-                  props.navigation.dispatch({
-                    ...StackActions.pop(count),
-                    source: first.key,
-                    target: state.key,
-                  });
+                const action = nativeWorkspacePopAction(state, first.key);
+                if (action) props.navigation.dispatch(action);
               }
             }}
             onDismiss={() => removeSheet(first.key)}
             onNativeDismiss={() => {
               const state = props.navigation.getState();
-              const count = nativeWorkspacePopCount(state, first.key);
-              if (count)
-                props.navigation.dispatch({
-                  ...StackActions.pop(count),
-                  source: first.key,
-                  target: state.key,
-                });
+              const action = nativeWorkspacePopAction(state, first.key);
+              if (action) props.navigation.dispatch(action);
               removeSheet(first.key);
             }}
           >

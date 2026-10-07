@@ -1206,7 +1206,8 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
                 : terminalTheme.background,
             // The v5 column extends behind UIKit chrome. Its measured top
             // reservation is zero when UIKit has already inset the body or moved the bar.
-            paddingTop: Platform.OS === "ios" ? (nativeColumnMetrics?.safeArea.top ?? 0) : 0,
+            paddingTop:
+              Platform.OS === "ios" ? (nativeColumnMetrics?.safeArea.top ?? insets.top) : 0,
             paddingBottom:
               Platform.OS === "android" && !keyboardState.isVisible ? insets.bottom : 0,
           }}

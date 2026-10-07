@@ -28,6 +28,22 @@ export function nativeWorkspacePopCount(
   return index <= 0 || index > state.index ? 0 : state.index - index + 1;
 }
 
+/** POP counts backwards from its source, so dismiss a group from the active descendant. */
+export function nativeWorkspacePopAction(
+  state: Pick<NavigationState, "key" | "index" | "routes">,
+  dismissedKey: string,
+) {
+  const count = nativeWorkspacePopCount(state, dismissedKey);
+  return count
+    ? {
+        type: "POP" as const,
+        payload: { count },
+        source: state.routes[state.index]!.key,
+        target: state.key,
+      }
+    : null;
+}
+
 /** Group pushes with the modal that owns their native stack. */
 export function partitionStackPresentations<T>(
   routes: readonly T[],

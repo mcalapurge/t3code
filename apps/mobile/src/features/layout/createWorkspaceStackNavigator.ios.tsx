@@ -2,7 +2,6 @@ import {
   createNavigatorFactory,
   NavigationContext,
   NavigationRouteContext,
-  StackActions,
   StackRouter,
   useNavigationBuilder,
   type NavigatorTypeBagBase,
@@ -37,7 +36,7 @@ import {
 import { NATIVE_WORKSPACE_COLUMNS_SUPPORTED } from "../../native/NativeWorkspaceColumns";
 import { V5StackHeader } from "../../native/V5StackHeader.ios";
 import {
-  nativeWorkspacePopCount,
+  nativeWorkspacePopAction,
   projectWorkspaceStack,
   partitionStackPresentations,
 } from "../../native/workspace-stack-projection";
@@ -123,9 +122,8 @@ function WorkspaceColumns(
   const handleNativeDismiss = useCallback(
     (key: string) => {
       const state = props.navigation.getState();
-      const count = nativeWorkspacePopCount(state, key);
-      if (count)
-        props.navigation.dispatch({ ...StackActions.pop(count), source: key, target: state.key });
+      const action = nativeWorkspacePopAction(state, key);
+      if (action) props.navigation.dispatch(action);
     },
     [props.navigation],
   );

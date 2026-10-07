@@ -1,12 +1,22 @@
+import * as NodeModule from "node:module";
 import type { ParamListBase, StackNavigationState } from "@react-navigation/native";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  nativeWorkspacePopAction,
   nativeWorkspacePopCount,
   projectWorkspaceStack,
   partitionStackPresentations,
   reconcileStackScreens,
 } from "./workspace-stack-projection";
+
+// Load the same router as native navigation without importing React Native into Node.
+const requireNavigation = NodeModule.createRequire(
+  NodeModule.createRequire(import.meta.url).resolve("@react-navigation/native/package.json"),
+);
+const { StackRouter } = requireNavigation("@react-navigation/routers") as {
+  StackRouter: typeof import("@react-navigation/native").StackRouter;
+};
 
 const home = { key: "home", name: "Home" };
 const thread = { key: "thread", name: "Thread", params: { threadId: "draft-thread" } };
@@ -78,6 +88,24 @@ describe("workspace router projection", () => {
 });
 
 describe("native workspace dismissal", () => {
+  it("dismisses a sheet and its pushed pages without removing the underlying draft", () => {
+    const state = history([home, thread, settings, legal]);
+    const action = nativeWorkspacePopAction(state, settings.key)!;
+    const next = StackRouter({}).getStateForAction(state, action, {
+      routeNames: state.routeNames,
+      routeParamList: {},
+      routeGetIdList: {},
+    });
+    expect(next?.routes).toEqual([home, thread]);
+    expect(next?.routes[1]).toBe(thread);
+    expect(next?.index).toBe(1);
+  });
+
+  it("does not dismiss retained sheets beyond the active index", () => {
+    const state = { ...history([home, thread, settings, legal]), index: 1 };
+    expect(nativeWorkspacePopAction(state, settings.key)).toBeNull();
+    expect(nativeWorkspacePopAction(state, legal.key)).toBeNull();
+  });
   it("pops a native dismissed file while keeping the conversation and its draft mounted", () => {
     expect(nativeWorkspacePopCount(history([home, thread, files]), files.key)).toBe(1);
   });

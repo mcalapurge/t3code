@@ -111,7 +111,7 @@ function convertItems(items: NativeStackHeaderItem[], prefix: string): HeaderIte
           identifier: item.identifier,
           title: item.label || item.accessibilityLabel || undefined,
           icon: convertIcon(item.icon),
-          menu: convertMenu(item.menu, `${id}:menu`),
+          menu: item.disabled ? undefined : convertMenu(item.menu, `${id}:menu`),
           hidesSharedBackground: item.hidesSharedBackground,
         };
       case "button":

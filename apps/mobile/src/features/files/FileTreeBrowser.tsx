@@ -253,6 +253,7 @@ export function FileTreeBrowser(props: {
   // list as direct screen content so automatic inset adjustment can find it.
   return (
     <LegendList
+      contentInsetStartAdjustment={headerInset}
       alwaysBounceVertical
       className="flex-1"
       data={visibleNodes}
